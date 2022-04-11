@@ -42,8 +42,7 @@ class Dataset:
         k = 5
 
         data = self.df.to_numpy(dtype=int8)
-        return torch.FloatTensor(data[:, 2:].reshape(u, i, 5), device=self.device)
-        # self.t = torch.zeros(, len(trainset.all_items(), 5))
+        return torch.Tensor(data[:, 2:].reshape(u, i, 5), device=self.device)
 
 
 if __name__ == "__main__":
