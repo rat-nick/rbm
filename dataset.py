@@ -1,7 +1,13 @@
-from numpy import int32, int8
+from numpy import int8
 import pandas as pd
 from surprise.dataset import Dataset as sDataset
 import torch
+
+if torch.cuda.is_available():
+    print("Using cuda")
+    torch.device("cuda")
+else:
+    print("Not using cuda")
 
 
 class Dataset:
@@ -41,4 +47,4 @@ class Dataset:
 
 if __name__ == "__main__":
     data = Dataset()
-    t = data.reshapeForTraining()
+    t = data.getDatasetAsTensor()
