@@ -42,7 +42,9 @@ class Dataset:
         k = 5
 
         data = self.df.to_numpy(dtype=int8)
-        return torch.Tensor(data[:, 2:].reshape(u, i, 5), device=self.device)
+        if self.device == "cuda":
+            return torch.cuda.FloatTensor(data[:, 2:].reshape(u, i, 5))
+        return torch.Tensor(data[:, 2:].reshape(u, i, 5))
 
 
 if __name__ == "__main__":
