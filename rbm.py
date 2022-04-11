@@ -4,7 +4,11 @@ import torch
 
 class RBM:
     def __init__(
-        self, visible_units: int, hidden_units: int, learning_rate: float = 0.01
+        self,
+        visible_units: int,
+        hidden_units: int,
+        device: str = "cpu",
+        learning_rate: float = 0.01,
     ) -> None:
         """
         Construct the RBM model with given number of visible and hidden units
@@ -12,11 +16,12 @@ class RBM:
         :arg visible_units: number of visible units
         :arg hidden_units: number of hidden units
         """
+        self.device = device
         self.learning_rate = learning_rate
-        self.w = torch.zeros(hidden_units, visible_units, 5)
+        self.w = torch.zeros(hidden_units, visible_units, 5, device=self.device)
 
-        self.v_bias = torch.zeros(visible_units, 5)
-        self.h_bias = torch.zeros(hidden_units)
+        self.v_bias = torch.zeros(visible_units, 5, device=self.device)
+        self.h_bias = torch.zeros(hidden_units, device=self.device)
 
     def sample_h(self, v):
         """
