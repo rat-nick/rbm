@@ -11,8 +11,9 @@ else:
 
 
 class Dataset:
-    def __init__(self) -> None:
+    def __init__(self, device: str = "cpu") -> None:
         self.load()
+        self.device = device
 
     def load(self):
         ds = sDataset.load_builtin(name="ml-100k", prompt=True)
@@ -41,7 +42,7 @@ class Dataset:
         k = 5
 
         data = self.df.to_numpy(dtype=int8)
-        return torch.FloatTensor(data[:, 2:].reshape(u, i, 5))
+        return torch.FloatTensor(data[:, 2:].reshape(u, i, 5), device=self.device)
         # self.t = torch.zeros(, len(trainset.all_items(), 5))
 
 
