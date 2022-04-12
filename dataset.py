@@ -1,15 +1,15 @@
-from numpy import int8
+from numpy import int16, int8
 import pandas as pd
 from surprise.dataset import Dataset as sDataset
 import torch
 
 
 class Dataset:
-    def __init__(self, device: str = "cpu") -> None:
-        self.load()
+    def __init__(self, device: str = "cpu", name="ml-100k") -> None:
+        self.load(name)
         self.device = device
 
-    def load(self):
+    def load(self, name):
         ds = sDataset.load_builtin(name="ml-100k", prompt=True)
         self.data = ds
 
@@ -17,14 +17,16 @@ class Dataset:
         """
         Convert ratings into a tensor of shape `(u, m, 5)` where u is the number of users, and m is the number of items.
         """
+
         trainset = self.data.build_full_trainset()
         self.df = pd.DataFrame(trainset.all_ratings())
-        self.df = pd.concat(
-            [
-                self.df,
-                pd.DataFrame(trainset.build_anti_testset(fill=0)),
-            ]
-        )
+        # print(self.df)
+        antiset = pd.DataFrame(trainset.build_anti_testset(fill=0))
+        antiset[0] = antiset[0].apply(trainset.to_inner_uid)
+        antiset[1] = antiset[1].apply(trainset.to_inner_iid)
+        # print(antiset)
+        self.df = pd.concat([self.df, antiset])
+        self.df.sort_values(by=[0, 1], inplace=True)
         # print(self.df)
         self.df.columns = ["user", "item", "rating"]
         self.df["rating"] = self.df["rating"].astype("int")
@@ -33,9 +35,11 @@ class Dataset:
 
         u = len(trainset.all_users())
         i = len(trainset.all_items())
+        # print(u, i)
         k = 5
 
-        data = self.df.to_numpy(dtype=int8)
+        data = self.df.to_numpy(dtype=int16)
+        # print(data)
         if self.device != "cpu":
             return torch.cuda.FloatTensor(data[:, 2:].reshape(u, i, 5))
         return torch.Tensor(data[:, 2:].reshape(u, i, 5))
@@ -44,4 +48,4 @@ class Dataset:
 if __name__ == "__main__":
     data = Dataset()
     t = data.getDatasetAsTensor()
-    print(t)
+    # print(t)
