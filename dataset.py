@@ -10,7 +10,7 @@ class Dataset:
         self.device = device
 
     def load(self, name):
-        ds = sDataset.load_builtin(name="ml-100k", prompt=True)
+        ds = sDataset.load_builtin(name=name, prompt=True)
         self.data = ds
 
     def getDatasetAsTensor(self):
