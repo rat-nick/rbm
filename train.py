@@ -14,12 +14,13 @@ else:
 
 dataset = Dataset(device=device)
 tensorData = dataset.getDatasetAsTensor()
-tensorData = tensorData[tensorData.sum(dim=[1, 2]) != 0]
-trainset, testset = train_test_split(tensorData, train_size=0.8)
+print(tensorData.shape)
+# tensorData = tensorData[tensorData.sum(dim=[1, 2]) != 0]
+trainset, testset = train_test_split(tensorData, train_size=0.75, random_state=42)
 print("Dataset loaded")
 
 
-rbm = RBM(trainset.shape[1], n_hidden=50, device=device, learning_rate=0.1)
+rbm = RBM(trainset.shape[1], n_hidden=10, device=device, learning_rate=0.1)
 
 for epoch in range(1, config.epochs + 1):
     i = 1
@@ -28,10 +29,12 @@ for epoch in range(1, config.epochs + 1):
         goodSample = case
         badSample = case
 
-        for k in range(10):
+        for k in range(2):
             _, hk = rbm.sample_h(badSample)  # forward pass
             _, badSample = rbm.sample_v(hk)  # backward pass
-
+            badSample[goodSample.sum(dim=1) == 0] = goodSample[
+                goodSample.sum(dim=1) == 0
+            ]
         rbm.train(goodSample, badSample)
         i += 1
         # if i % 100 == 0:
@@ -47,14 +50,12 @@ for epoch in range(1, config.epochs + 1):
     print(f"Epoch {epoch} done.", end=" ")
     rmse = 0
     for case in testset:
-        reconstruction = rbm.reconstruct(case)
-        reconstruction = reconstruction[case.sum(dim=1) > 0]
+        rec = rbm.reconstruct(case)
+        rec = rec[case.sum(dim=1) > 0]
         case = case[case.sum(dim=1) > 0]
-        case = torch.argmax(case, dim=1) + 1
-        reconstruction = torch.argmax(reconstruction, dim=1) + 1
+        case = torch.argmax(case, dim=1)
+        rec = torch.argmax(rec, dim=1)
+        rec[case.sum(dim=1) == 0] = case[case.sum(dim=1) == 0]
 
-        # print(f"Case:{case}")
-        # print(f"Reco:{reconstruction}")
-        # print(f"C-R :{case-reconstruction}")
-        rmse += torch.sqrt(torch.sum((case - reconstruction) ** 2) / len(case))
+        rmse += torch.sqrt(torch.sum((case - rec) ** 2) / len(case))
     print(rmse / len(testset))
