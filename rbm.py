@@ -22,8 +22,8 @@ class RBM:
         self.learning_rate = learning_rate
         self.w = torch.randn(n_hidden, n_visible, 5, device=self.device)
 
-        self.v_bias = torch.randn(n_visible, 5, device=self.device)
-        self.h_bias = torch.randn(n_hidden, device=self.device)
+        self.v_bias = torch.randn(1, n_visible, 5, device=self.device)
+        self.h_bias = torch.randn(1, n_hidden, device=self.device)
 
     def sample_h(self, v: torch.Tensor) -> torch.Tensor:
         """
