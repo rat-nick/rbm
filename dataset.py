@@ -39,10 +39,8 @@ class Dataset:
         k = 5
 
         data = self.df.to_numpy(dtype=int16)
-        # print(data)
-        if self.device != "cpu":
-            return torch.cuda.FloatTensor(data[:, 2:].reshape(u, i, 5))
-        return torch.Tensor(data[:, 2:].reshape(u, i, 5))
+        t = torch.Tensor(data[:, 2:].reshape(u, i, 5))
+        return t.to(device=self.device)
 
 
 if __name__ == "__main__":
