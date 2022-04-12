@@ -3,12 +3,6 @@ import pandas as pd
 from surprise.dataset import Dataset as sDataset
 import torch
 
-if torch.cuda.is_available():
-    print("Using cuda")
-    torch.device("cuda")
-else:
-    print("Not using cuda")
-
 
 class Dataset:
     def __init__(self, device: str = "cpu") -> None:
@@ -31,11 +25,11 @@ class Dataset:
                 pd.DataFrame(trainset.build_anti_testset(fill=0)),
             ]
         )
+        # print(self.df)
         self.df.columns = ["user", "item", "rating"]
         self.df["rating"] = self.df["rating"].astype("int")
         self.df = pd.concat([self.df, pd.get_dummies(self.df.rating)], axis=1)
         self.df = self.df.drop(["rating", 0], axis=1)
-        # print(self.df)
 
         u = len(trainset.all_users())
         i = len(trainset.all_items())
@@ -50,3 +44,4 @@ class Dataset:
 if __name__ == "__main__":
     data = Dataset()
     t = data.getDatasetAsTensor()
+    print(t)

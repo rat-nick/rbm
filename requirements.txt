@@ -2,3 +2,4 @@ pandas
 scikit-surprise
 torch
 numpy
+sklearn
