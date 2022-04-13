@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from utils import *
 
 
 class RBM:
@@ -18,8 +19,12 @@ class RBM:
         :arg device: the device to instantiate the tensor on
         :arg learning_rate: rate at which to modify weights and biases
         """
+        self.n_visible = n_visible
+        self.n_hidden = n_hidden
+
         self.device = device
         self.learning_rate = learning_rate
+
         self.w = torch.randn(n_hidden, n_visible, 5, device=self.device)
 
         self.v_bias = torch.randn(n_visible, 5, device=self.device)
@@ -35,9 +40,9 @@ class RBM:
 
         activation = self.h_bias + a
 
-        p_h_given_v = torch.sigmoid(activation)
-        # print(torch.bernoulli(p_h_given_v))
-        return p_h_given_v, torch.sigmoid(p_h_given_v)
+        phv = torch.sigmoid(activation)
+        # print(torch.bernoulli(phv))
+        return phv, torch.bernoulli(phv)
 
     def sample_v(self, h: torch.Tensor) -> torch.Tensor:
         """
@@ -46,12 +51,12 @@ class RBM:
         """
 
         hw = torch.matmul(self.w.permute(1, 2, 0), h.t())
-        # print(hw.shape)
-        top = torch.exp(hw + self.v_bias.expand_as(hw))
-        bottom = torch.sum(top, dim=1)
-        # print(bottom.shape)
-        p_v_given_h = torch.div(top.t(), bottom).t()
-        return p_v_given_h, F.gumbel_softmax(p_v_given_h, hard=True)
+
+        pvh = hw + self.v_bias.expand_as(hw)
+
+        pvh = pvh.softmax(dim=1)
+
+        return pvh, softmax_to_onehot(pvh)
 
     def train(self, goodSample: torch.Tensor, badSample: torch.Tensor) -> None:
         """
@@ -65,12 +70,11 @@ class RBM:
         # caluclate the deltas
         hb_delta = good_h - bad_h
         vb_delta = goodSample - badSample
-        # print(self.w.shape, hb_delta.shape)
 
-        w_delta = (self.w.permute(1, 2, 0) * hb_delta).permute(2, 0, 1)
-        # print(w_delta.shape, vb_delta.shape)
-        w_delta = w_delta * vb_delta
-        # print(w_delta.shape)
+        w_delta = hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
+            [1, self.n_visible, 5]
+        )
+        # print(w_delta)
         # update the parameters of the model
         self.v_bias += vb_delta * self.learning_rate
         self.h_bias += hb_delta * self.learning_rate
