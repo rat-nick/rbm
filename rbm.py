@@ -22,8 +22,8 @@ class RBM:
         self.learning_rate = learning_rate
         self.w = torch.randn(n_hidden, n_visible, 5, device=self.device)
 
-        self.v_bias = torch.randn(1, n_visible, 5, device=self.device)
-        self.h_bias = torch.randn(1, n_hidden, device=self.device)
+        self.v_bias = torch.randn(n_visible, 5, device=self.device)
+        self.h_bias = torch.randn(n_hidden, device=self.device)
 
     def sample_h(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -65,8 +65,12 @@ class RBM:
         # caluclate the deltas
         hb_delta = good_h - bad_h
         vb_delta = goodSample - badSample
-        w_delta = (self.w.permute(1, 2, 0) * hb_delta).permute(2, 0, 1)
+        # print(self.w.shape, hb_delta.shape)
 
+        w_delta = (self.w.permute(1, 2, 0) * hb_delta).permute(2, 0, 1)
+        # print(w_delta.shape, vb_delta.shape)
+        w_delta = w_delta * vb_delta
+        # print(w_delta.shape)
         # update the parameters of the model
         self.v_bias += vb_delta * self.learning_rate
         self.h_bias += hb_delta * self.learning_rate
