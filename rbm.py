@@ -41,7 +41,7 @@ class RBM:
         activation = self.h_bias + a
 
         phv = torch.sigmoid(activation)
-        # print(torch.bernoulli(phv))
+
         return phv, torch.bernoulli(phv)
 
     def sample_v(self, h: torch.Tensor) -> torch.Tensor:
@@ -58,18 +58,17 @@ class RBM:
 
         return pvh, softmax_to_onehot(pvh)
 
-    def train(self, goodSample: torch.Tensor, badSample: torch.Tensor) -> None:
+    def train(
+        self, v0: torch.Tensor, vk: torch.Tensor, ph0: torch.Tensor, phk: torch.Tensor
+    ) -> None:
         """
         Perform contrastive divergence algorithm to optimize the weights that minimize the energy
         This maximizes the log-likelihood of the model
         """
 
-        good_h = self.sample_h(goodSample)[1]
-        bad_h = self.sample_h(badSample)[1]
-
         # caluclate the deltas
-        hb_delta = good_h - bad_h
-        vb_delta = goodSample - badSample
+        hb_delta = ph0 - phk
+        vb_delta = v0 - vk
 
         w_delta = hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
             [1, self.n_visible, 5]
