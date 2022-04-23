@@ -1,3 +1,4 @@
+from random import sample
 import torch
 import torch.nn.functional as F
 from utils import *
@@ -34,12 +35,13 @@ class RBM:
         self.v_bias = torch.randn(n_visible, 5, device=self.device)
         self.h_bias = torch.zeros(n_hidden, device=self.device)
 
-        self.preW = torch.zeros(n_hidden, n_visible, 5, device=self.device)
+        self.prev_w_delta = torch.zeros(n_hidden, n_visible, 5, device=self.device)
+        self.prev_vb_delta = torch.zeros(n_visible, 5, device=self.device)
+        self.prev_hb_delta = torch.zeros(n_hidden, device=self.device)
 
         self.adaptive = adaptive
         self.momentum = momentum
         self.alpha = alpha
-        self.batch_size = batch_size
 
     def sample_h(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -69,31 +71,57 @@ class RBM:
 
         return pvh, softmax_to_onehot(pvh)
 
-    def apply_gradient(
-        self, v0: torch.Tensor, vk: torch.Tensor, ph0: torch.Tensor, phk: torch.Tensor
-    ) -> None:
+    def apply_gradient(self, minibatch: torch.Tensor, t: int = 1) -> None:
         """
         Perform contrastive divergence algorithm to optimize the weights that minimize the energy
         This maximizes the log-likelihood of the model
         """
+        hb_delta = torch.zeros(self.n_hidden, device=self.device)
+        vb_delta = torch.zeros(self.n_visible, 5, device=self.device)
+        w_delta = torch.zeros(self.n_hidden, self.n_visible, 5, device=self.device)
 
-        # caluclate the deltas
-        hb_delta = (ph0 - phk) / self.batch_size
-        vb_delta = (v0 - vk) / self.batch_size
+        for case in minibatch:
+            v0 = case
+            pvk = case
 
-        w_delta = (
-            hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view([1, self.n_visible, 5])
-        ) / self.batch_size
+            _, h0 = self.sample_h(v0)
+            phk = h0
+            # do gibbs sampling for t steps
+            for i in range(t):
+                phk, hk = self.sample_h(pvk)  # forward pass
+                pvk, vk = self.sample_v(phk)  # backward pass
+
+                pvk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
+                vk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
+
+            phk, _ = self.sample_h(pvk)
+
+            # caluclate the deltas
+            hb_delta += h0 - phk
+            vb_delta += v0 - pvk
+
+            w_delta += hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
+                [1, self.n_visible, 5]
+            )
 
         if self.momentum:
-            w_delta += self.alpha * self.preW
+            w_delta += self.alpha * self.prev_w_delta
+            hb_delta += self.alpha * self.prev_hb_delta
+            vb_delta += self.alpha * self.prev_vb_delta
+
+        hb_delta /= len(minibatch)
+        vb_delta /= len(minibatch)
+        w_delta /= len(minibatch)
 
         # update the parameters of the model
         self.v_bias += vb_delta * self.learning_rate
         self.h_bias += hb_delta * self.learning_rate
         self.w += w_delta * self.learning_rate
 
-        self.preW = w_delta
+        # remember the deltas for next training step
+        self.prev_w_delta = w_delta
+        self.prev_hb_delta = hb_delta
+        self.prev_vb_delta = vb_delta
 
     def reconstruct(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -103,19 +131,3 @@ class RBM:
         """
 
         return self.sample_v(self.sample_h(v)[1])[1]
-
-
-import torch.nn.functional as F
-
-if __name__ == "__main__":
-    rbm = RBM(5, 3)
-
-    v0 = F.one_hot(torch.arange(5, 10) % 4, num_classes=5)
-    v0 = v0.float()
-    _, h0 = rbm.sample_h(v0)
-    print(v0, h0)
-    _, vk = rbm.sample_v(h0)
-    _, hk = rbm.sample_h(vk)
-    print(vk, hk)
-    rbm.apply_gradient(v0, vk, h0, hk)
-    # rbm.reconstruct(None)
