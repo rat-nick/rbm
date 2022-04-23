@@ -10,6 +10,10 @@ class RBM:
         n_hidden: int,
         device: str = "cpu",
         learning_rate: float = 0.1,
+        adaptive=False,
+        momentum=False,
+        alpha=0.9,
+        batch_size=1,
     ) -> None:
         """
         Construct the RBM model with given number of visible and hidden units
@@ -28,7 +32,14 @@ class RBM:
         self.w = torch.randn(n_hidden, n_visible, 5, device=self.device)
 
         self.v_bias = torch.randn(n_visible, 5, device=self.device)
-        self.h_bias = torch.randn(n_hidden, device=self.device)
+        self.h_bias = torch.zeros(n_hidden, device=self.device)
+
+        self.preW = torch.zeros(n_hidden, n_visible, 5, device=self.device)
+
+        self.adaptive = adaptive
+        self.momentum = momentum
+        self.alpha = alpha
+        self.batch_size = batch_size
 
     def sample_h(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -58,7 +69,7 @@ class RBM:
 
         return pvh, softmax_to_onehot(pvh)
 
-    def train(
+    def apply_gradient(
         self, v0: torch.Tensor, vk: torch.Tensor, ph0: torch.Tensor, phk: torch.Tensor
     ) -> None:
         """
@@ -67,17 +78,22 @@ class RBM:
         """
 
         # caluclate the deltas
-        hb_delta = ph0 - phk
-        vb_delta = v0 - vk
+        hb_delta = (ph0 - phk) / self.batch_size
+        vb_delta = (v0 - vk) / self.batch_size
 
-        w_delta = hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
-            [1, self.n_visible, 5]
-        )
-        # print(w_delta)
+        w_delta = (
+            hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view([1, self.n_visible, 5])
+        ) / self.batch_size
+
+        if self.momentum:
+            w_delta += self.alpha * self.preW
+
         # update the parameters of the model
         self.v_bias += vb_delta * self.learning_rate
         self.h_bias += hb_delta * self.learning_rate
         self.w += w_delta * self.learning_rate
+
+        self.preW = w_delta
 
     def reconstruct(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -89,6 +105,17 @@ class RBM:
         return self.sample_v(self.sample_h(v)[1])[1]
 
 
+import torch.nn.functional as F
+
 if __name__ == "__main__":
-    rbm = RBM(100, 20)
-    rbm.reconstruct(None)
+    rbm = RBM(5, 3)
+
+    v0 = F.one_hot(torch.arange(5, 10) % 4, num_classes=5)
+    v0 = v0.float()
+    _, h0 = rbm.sample_h(v0)
+    print(v0, h0)
+    _, vk = rbm.sample_v(h0)
+    _, hk = rbm.sample_h(vk)
+    print(vk, hk)
+    rbm.apply_gradient(v0, vk, h0, hk)
+    # rbm.reconstruct(None)
