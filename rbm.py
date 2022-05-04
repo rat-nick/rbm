@@ -10,11 +10,9 @@ class RBM:
         n_visible: int,
         n_hidden: int,
         device: str = "cpu",
-        learning_rate: float = 0.1,
+        learning_rate: float = 0.0001,
         adaptive=False,
-        momentum=False,
-        alpha=0.9,
-        batch_size=1,
+        momentum=0.0,
     ) -> None:
         """
         Construct the RBM model with given number of visible and hidden units
@@ -28,12 +26,11 @@ class RBM:
         self.n_hidden = n_hidden
 
         self.device = device
-        self.learning_rate = learning_rate
+        self.alpha = learning_rate
 
-        self.w = torch.randn(n_hidden, n_visible, 5, device=self.device)
-
+        self.w = torch.zeros(n_hidden, n_visible, 5, device=self.device)
         self.v_bias = torch.randn(n_visible, 5, device=self.device)
-        self.h_bias = torch.zeros(n_hidden, device=self.device)
+        self.h_bias = torch.randn(n_hidden, device=self.device) * -4
 
         self.prev_w_delta = torch.zeros(n_hidden, n_visible, 5, device=self.device)
         self.prev_vb_delta = torch.zeros(n_visible, 5, device=self.device)
@@ -41,7 +38,6 @@ class RBM:
 
         self.adaptive = adaptive
         self.momentum = momentum
-        self.alpha = alpha
 
     def sample_h(self, v: torch.Tensor) -> torch.Tensor:
         """
@@ -86,6 +82,7 @@ class RBM:
 
             _, h0 = self.sample_h(v0)
             phk = h0
+
             # do gibbs sampling for t steps
             for i in range(t):
                 phk, hk = self.sample_h(pvk)  # forward pass
@@ -94,31 +91,32 @@ class RBM:
                 pvk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
                 vk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
 
-            phk, _ = self.sample_h(pvk)
+            phk, hk = self.sample_h(pvk)
 
             # caluclate the deltas
-            hb_delta += h0 - phk
-            vb_delta += v0 - pvk
+            hb_delta += h0 - hk
+            vb_delta += v0 - vk
 
             w_delta += hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
                 [1, self.n_visible, 5]
             )
 
-        if self.momentum:
-            w_delta += self.alpha * self.prev_w_delta
-            hb_delta += self.alpha * self.prev_hb_delta
-            vb_delta += self.alpha * self.prev_vb_delta
+        # apply momentum if applicable
+        w_delta += self.momentum * self.prev_w_delta
+        hb_delta += self.momentum * self.prev_hb_delta
+        vb_delta += self.momentum * self.prev_vb_delta
 
+        # divide learning rate by the size of the minibatch
         hb_delta /= len(minibatch)
         vb_delta /= len(minibatch)
         w_delta /= len(minibatch)
 
         # update the parameters of the model
-        self.v_bias += vb_delta * self.learning_rate
-        self.h_bias += hb_delta * self.learning_rate
-        self.w += w_delta * self.learning_rate
+        self.v_bias += vb_delta * self.alpha
+        self.h_bias += hb_delta * self.alpha
+        self.w += w_delta * self.alpha
 
-        # remember the deltas for next training step
+        # remember the deltas for next training step when using momentum
         self.prev_w_delta = w_delta
         self.prev_hb_delta = hb_delta
         self.prev_vb_delta = vb_delta

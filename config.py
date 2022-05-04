@@ -1,3 +1,3 @@
 epochs = 500
-batch_size = 100
+batch_size = 20
 T = 1
