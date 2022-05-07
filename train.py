@@ -13,20 +13,18 @@ else:
     device = "cpu"
 
 
-dataset = Dataset(device=device, name="ml-100k")
+dataset = Dataset(device=device, name="ml-1m")
 tensorData = dataset.getDatasetAsTensor()
 trainset, testset = train_test_split(tensorData, train_size=0.9, random_state=42)
 print(trainset.shape, testset.shape)
 
 
 rbm = RBM(
-    trainset.shape[1],
-    n_hidden=20,
+    n_visible=trainset.shape[1] * trainset.shape[2],
+    n_hidden=10,
     device=device,
     learning_rate=0.1,
-    batch_size=config.batch_size,
-    momentum=True,
-    alpha=0.9,
+    momentum=0.5,
 )
 
 for epoch in range(1, config.epochs + 1):
@@ -38,7 +36,7 @@ for epoch in range(1, config.epochs + 1):
     for user in range(0, len(trainset), config.batch_size):
 
         minibatch = trainset[user : user + config.batch_size]
-        rbm.apply_gradient(minibatch=minibatch)
+        rbm.apply_gradient(minibatch=minibatch, t=(epoch // 20 + 1))
 
     se = 0
     ae = 0

@@ -1,4 +1,4 @@
-from random import sample
+from typing import Tuple
 import torch
 import torch.nn.functional as F
 from utils import *
@@ -10,7 +10,7 @@ class RBM:
         n_visible: int,
         n_hidden: int,
         device: str = "cpu",
-        learning_rate: float = 0.0001,
+        learning_rate: float = 0.001,
         adaptive=False,
         momentum=0.0,
     ) -> None:
@@ -28,83 +28,91 @@ class RBM:
         self.device = device
         self.alpha = learning_rate
 
-        self.w = torch.zeros(n_hidden, n_visible, 5, device=self.device)
-        self.v_bias = torch.randn(n_visible, 5, device=self.device)
-        self.h_bias = torch.randn(n_hidden, device=self.device) * -4
+        self.w = torch.randn(n_visible, n_hidden, device=self.device)
+        self.v_bias = torch.randn(n_visible, device=self.device)
+        self.h_bias = torch.randn(1, n_hidden, device=self.device)
 
-        self.prev_w_delta = torch.zeros(n_hidden, n_visible, 5, device=self.device)
-        self.prev_vb_delta = torch.zeros(n_visible, 5, device=self.device)
-        self.prev_hb_delta = torch.zeros(n_hidden, device=self.device)
+        self.prev_w_delta = torch.zeros(n_visible, n_hidden, device=self.device)
+        self.prev_vb_delta = torch.zeros(n_visible, device=self.device)
+        self.prev_hb_delta = torch.zeros(1, n_hidden, device=self.device)
 
         self.adaptive = adaptive
         self.momentum = momentum
 
-    def sample_h(self, v: torch.Tensor) -> torch.Tensor:
+    def forward_pass(
+        self,
+        v: torch.Tensor,
+        activation=torch.sigmoid,
+        sampler=torch.bernoulli,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample hidden units given that v is the visible layer
         :param v: visible layer
+        :param activation: activation function to be used
+        :param sampler: sampling function to be used
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: probability and sample tensor
         """
+        if len(v.shape) > 1:
+            v = v.flatten()
+        a = torch.matmul(v, self.w)
 
-        a = torch.sum(torch.matmul(self.w, v.t()), dim=[1, 2])
+        a = self.h_bias + a
 
-        activation = self.h_bias + a
+        ph = activation(a)
 
-        phv = torch.sigmoid(activation)
+        return ph, sampler(ph)
 
-        return phv, torch.bernoulli(phv)
-
-    def sample_v(self, h: torch.Tensor) -> torch.Tensor:
+    def backward_pass(
+        self, h: torch.Tensor, activation=ratings_softmax
+    ) -> torch.Tensor:
         """
         Sample visible units given that h is the hidden layer
         :param h: hidden layer
         """
 
-        hw = torch.matmul(self.w.permute(1, 2, 0), h.t())
+        hw = torch.matmul(h, self.w.t())
 
-        pvh = hw + self.v_bias.expand_as(hw)
-
-        pvh = pvh.softmax(dim=1)
-
-        return pvh, softmax_to_onehot(pvh)
+        pv = self.v_bias + hw
+        pv = activation(pv.flatten())
+        return pv
 
     def apply_gradient(self, minibatch: torch.Tensor, t: int = 1) -> None:
         """
         Perform contrastive divergence algorithm to optimize the weights that minimize the energy
         This maximizes the log-likelihood of the model
         """
-        hb_delta = torch.zeros(self.n_hidden, device=self.device)
-        vb_delta = torch.zeros(self.n_visible, 5, device=self.device)
-        w_delta = torch.zeros(self.n_hidden, self.n_visible, 5, device=self.device)
+        vb_delta = torch.zeros(self.n_visible, device=self.device)
+        hb_delta = torch.zeros(1, self.n_hidden, device=self.device)
+        w_delta = torch.zeros(self.n_visible, self.n_hidden, device=self.device)
 
         for case in minibatch:
             v0 = case
-            pvk = case
 
-            _, h0 = self.sample_h(v0)
-            phk = h0
+            _, h0 = self.forward_pass(v0)
+            hk = phk = h0
 
-            # do gibbs sampling for t steps
+            # do Gibbs sampling for t steps
             for i in range(t):
-                phk, hk = self.sample_h(pvk)  # forward pass
-                pvk, vk = self.sample_v(phk)  # backward pass
+                vk = self.backward_pass(hk)  # backward pass
 
-                pvk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
-                vk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]
-
-            phk, hk = self.sample_h(pvk)
+                phk, hk = self.forward_pass(vk)  # forward pass
+            vk[v0.sum(dim=1) == 0] = v0[v0.sum(dim=1) == 0]  # remove missing
+            # flatten v0 and vk
+            v0 = v0.flatten()
+            vk = vk.flatten()
 
             # caluclate the deltas
             hb_delta += h0 - hk
             vb_delta += v0 - vk
 
-            w_delta += hb_delta.view([self.n_hidden, 1, 1]) * vb_delta.view(
-                [1, self.n_visible, 5]
-            )
+        w_delta = (vb_delta * hb_delta.t()).t()
 
         # apply momentum if applicable
-        w_delta += self.momentum * self.prev_w_delta
-        hb_delta += self.momentum * self.prev_hb_delta
-        vb_delta += self.momentum * self.prev_vb_delta
+        # w_delta += self.momentum * self.prev_w_delta
+        # hb_delta += self.momentum * self.prev_hb_delta
+        # vb_delta += self.momentum * self.prev_vb_delta
 
         # divide learning rate by the size of the minibatch
         hb_delta /= len(minibatch)
@@ -127,5 +135,16 @@ class RBM:
         by performing a forward and backward pass
         :arg v: the input tensor
         """
+        _, h = self.forward_pass(v)
+        ret = self.backward_pass(h)
+        return ret
 
-        return self.sample_v(self.sample_h(v)[1])[1]
+
+if __name__ == "__main__":
+    model = RBM(100, 20)
+    v = torch.randn(20, 5)
+    _, h = model.forward_pass(v)
+    v = model.backward_pass(h)
+
+    batch = torch.randn(20, 20, 5)
+    model.apply_gradient(batch)

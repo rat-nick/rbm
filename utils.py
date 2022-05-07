@@ -51,3 +51,13 @@ def reconstruction_mae(o, r):
     o = onehot_to_ratings(o).float()
 
     return mae(o, r).item()
+
+
+def vector_to_matrix(v: torch.Tensor, cols):
+    return v.reshape(v // cols, cols)
+
+
+def ratings_softmax(v, num_ratings=5):
+    v = v.reshape(v.shape[0] // num_ratings, num_ratings)
+    v = torch.softmax(v, dim=1)
+    return v
