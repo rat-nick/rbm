@@ -1,5 +1,6 @@
 from math import sqrt
 import torch
+import matplotlib.pyplot as plt
 
 mae = torch.nn.L1Loss()
 mse = torch.nn.MSELoss()
@@ -8,6 +9,11 @@ mse = torch.nn.MSELoss()
 def softmax_to_onehot(v):
     imax = torch.argmax(v, 1, keepdim=True)
     return torch.zeros_like(v).scatter(1, imax, 1)
+
+
+def softmax_to_rating(v):
+    ratings = torch.arange(1, v.shape[0] + 1).float()
+    return torch.dot(v, ratings).item()
 
 
 def onehot_to_ratings(v):
@@ -53,11 +59,15 @@ def reconstruction_mae(o, r):
     return mae(o, r).item()
 
 
-def vector_to_matrix(v: torch.Tensor, cols):
-    return v.reshape(v // cols, cols)
-
-
 def ratings_softmax(v, num_ratings=5):
     v = v.reshape(v.shape[0] // num_ratings, num_ratings)
     v = torch.softmax(v, dim=1)
     return v
+
+
+if __name__ == "__main__":
+    v1 = torch.randint(high=10, size=(5,)).float()
+    v2 = torch.randint(high=10, size=(5,)).float()
+    v3 = sqrt(mse(v1, v2).item())
+    v4 = mae(v1, v2)
+    print(v1, v2, v3, v4)
